@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Michael Mbomena | Projects</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #0f1115;
+      color: #f5f7fa;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 20px 60px;
+    }
+    header {
+      margin-bottom: 40px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2.4rem;
+    }
+    .subtitle {
+      color: #b8c0cc;
+      max-width: 700px;
+    }
+    .top-links {
+      margin-top: 18px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .top-links a, .repo-links a {
+      text-decoration: none;
+      color: #0f1115;
+      background: #ffffff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-weight: 600;
+      display: inline-block;
+    }
+    .controls {
+      margin: 30px 0 24px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    input, select {
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #2b3240;
+      background: #171b22;
+      color: #f5f7fa;
+    }
+    input {
+      flex: 1;
+      min-width: 240px;
+    }
+    #projects {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      background: #171b22;
+      border: 1px solid #252c38;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    }
+    .card h2 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      font-size: 1.2rem;
+    }
+    .description {
+      color: #c8d0da;
+      min-height: 48px;
+    }
+    .meta {
+      margin: 12px 0;
+      font-size: 0.92rem;
+      color: #9eabb8;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .readme {
+      margin: 14px 0;
+      color: #e7edf5;
+      font-size: 0.95rem;
+      white-space: pre-line;
+    }
+    .repo-links {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .repo-links a.secondary {
+      background: transparent;
+      color: #ffffff;
+      border: 1px solid #3a4453;
+    }
+    .status {
+      color: #b8c0cc;
+      margin-bottom: 20px;
+    }
+    footer {
+      margin-top: 50px;
+      color: #8f99a8;
+      font-size: 0.95rem;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Michael Mbomena</h1>
+      <p class="subtitle">
+        AI, ML, data and software projects. This page automatically pulls my public GitHub repositories and shows a preview of each README.
+      </p>
+      <div class="top-links">
+        <a href="https://github.com/YOUR_GITHUB_USERNAME" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://www.linkedin.com/in/YOUR-LINKEDIN/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      </div>
+    </header>
+
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search projects..." />
+      <select id="sort">
+        <option value="updated">Sort: Recently updated</option>
+        <option value="stars">Sort: Most stars</option>
+        <option value="name">Sort: Name A-Z</option>
+      </select>
+    </div>
+
+    <p class="status" id="status">Loading projects...</p>
+    <section id="projects"></section>
+
+    <footer>
+      Built with GitHub Pages + GitHub API.
+    </footer>
+  </div>
+
+  <script>
+    const username = "YOUR_GITHUB_USERNAME";
+    const excludedRepos = new Set([
+      `${username}.github.io`
+    ]);
+
+    const projectsEl = document.getElementById("projects");
+    const statusEl = document.getElementById("status");
+    const searchEl = document.getElementById("search");
+    const sortEl = document.getElementById("sort");
+
+    let allRepos = [];
+
+    function stripMarkdown(text) {
+      return text
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/!\[.*?\]\(.*?\)/g, "")
+        .replace(/\[([^\]]+)\]\((.*?)\)/g, "$1")
+        .replace(/^#{1,6}\s+/gm, "")
+        .replace(/^\s*[-*+]\s+/gm, "• ")
+        .replace(/^\s*\d+\.\s+/gm, "")
+        .replace(/[>*_~]/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+
+    function formatDate(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    }
+
+    async function fetchRepos() {
+      const res = await fetch(
+        `https://api.github.com/users/${username}/repos?per_page=100&sort=updated`,
+        {
+          headers: {
+            "Accept": "application/vnd.github+json"
+          }
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch repositories: ${res.status}`);
+      }
+
+      const repos = await res.json();
+
+      return repos
+        .filter(repo => !repo.fork)
+        .filter(repo => !excludedRepos.has(repo.name))
+        .filter(repo => !repo.private);
+    }
+
+    async function fetchReadme(owner, repo) {
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/readme`,
+          {
+            headers: {
+              "Accept": "application/vnd.github.raw+json"
+            }
+          }
+        );
+
+        if (!res.ok) return "";
+
+        const text = await res.text();
+        const cleaned = stripMarkdown(text);
+
+        return cleaned.slice(0, 260) + (cleaned.length > 260 ? "..." : "");
+      } catch {
+        return "";
+      }
+    }
+
+    async function enrichRepos(repos) {
+      const enriched = await Promise.all(
+        repos.map(async (repo) => {
+          const readmePreview = await fetchReadme(repo.owner.login, repo.name);
+          return { ...repo, readmePreview };
+        })
+      );
+      return enriched;
+    }
+
+    function sortRepos(repos, sortBy) {
+      const sorted = [...repos];
+
+      if (sortBy === "stars") {
+        sorted.sort((a, b) => b.stargazers_count - a.stargazers_count);
+      } else if (sortBy === "name") {
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+      } else {
+        sorted.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      }
+
+      return sorted;
+    }
+
+    function renderRepos() {
+      const query = searchEl.value.toLowerCase().trim();
+      const sortBy = sortEl.value;
+
+      const filtered = allRepos.filter(repo => {
+        const haystack = [
+          repo.name,
+          repo.description || "",
+          repo.language || "",
+          repo.readmePreview || ""
+        ].join(" ").toLowerCase();
+
+        return haystack.includes(query);
+      });
+
+      const sorted = sortRepos(filtered, sortBy);
+
+      projectsEl.innerHTML = "";
+
+      if (sorted.length === 0) {
+        statusEl.textContent = "No matching projects found.";
+        return;
+      }
+
+      statusEl.textContent = `${sorted.length} project${sorted.length !== 1 ? "s" : ""} found.`;
+
+      for (const repo of sorted) {
+        const card = document.createElement("article");
+        card.className = "card";
+
+        card.innerHTML = `
+          <h2>${repo.name}</h2>
+          <p class="description">${repo.description || "No repository description yet."}</p>
+          <div class="meta">
+            <span>⭐ ${repo.stargazers_count}</span>
+            <span>🛠 ${repo.language || "Not specified"}</span>
+            <span>Updated: ${formatDate(repo.updated_at)}</span>
+          </div>
+          <div class="readme">
+            ${repo.readmePreview || "No README preview available."}
+          </div>
+          <div class="repo-links">
+            <a href="${repo.html_url}" target="_blank" rel="noopener noreferrer">View Repo</a>
+            <a class="secondary" href="${repo.html_url}#readme" target="_blank" rel="noopener noreferrer">README</a>
+          </div>
+        `;
+
+        projectsEl.appendChild(card);
+      }
+    }
+
+    async function init() {
+      try {
+        statusEl.textContent = "Loading repositories...";
+        const repos = await fetchRepos();
+        allRepos = await enrichRepos(repos);
+        renderRepos();
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = "Could not load projects. Check your username or try again later.";
+      }
+    }
+
+    searchEl.addEventListener("input", renderRepos);
+    sortEl.addEventListener("change", renderRepos);
+
+    init();
+  </script>
+</body>
+</html>
